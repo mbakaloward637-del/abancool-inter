@@ -201,7 +201,9 @@ export default function HostingPage() {
                     </li>
                   ))}
                 </ul>
-                <Button className={`w-full rounded-sm font-semibold uppercase text-xs tracking-wider ${
+                <Button 
+                  onClick={() => handleOrderNow(plan)}
+                  className={`w-full rounded-sm font-semibold uppercase text-xs tracking-wider ${
                   plan.popular
                     ? "bg-accent text-accent-foreground hover:bg-accent/90"
                     : "bg-primary text-primary-foreground hover:bg-primary/90"
