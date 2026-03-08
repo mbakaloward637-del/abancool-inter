@@ -1,8 +1,9 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { LayoutDashboard, Server, Globe, FileText, CreditCard, Headphones, User, LogOut } from "lucide-react";
+import { LayoutDashboard, Server, Globe, FileText, CreditCard, Headphones, User, LogOut, Monitor } from "lucide-react";
 
 const sidebarLinks = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/client/dashboard" },
+  { icon: Monitor, label: "cPanel", path: "/client/dashboard/cpanel" },
   { icon: Server, label: "Hosting", path: "/client/dashboard/hosting" },
   { icon: Globe, label: "Domains", path: "/client/dashboard/domains" },
   { icon: FileText, label: "Invoices", path: "/client/dashboard/invoices" },
