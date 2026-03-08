@@ -1,10 +1,11 @@
 import { useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Globe, ArrowRight, Shield, RefreshCw, Lock, Headphones, CheckCircle2, ShoppingCart, Loader2, X, Plus, Minus, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import datacenter from "@/assets/hero-datacenter.jpg";
 
 const extensions = [
