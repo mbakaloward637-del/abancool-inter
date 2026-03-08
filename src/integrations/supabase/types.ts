@@ -14,7 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      hosting_orders: {
+        Row: {
+          amount_paid: number
+          billing_cycle: string
+          cpanel_url: string | null
+          cpanel_username: string | null
+          created_at: string
+          domain: string | null
+          expires_at: string | null
+          id: string
+          payment_method: string | null
+          payment_reference: string | null
+          plan_id: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_paid?: number
+          billing_cycle?: string
+          cpanel_url?: string | null
+          cpanel_username?: string | null
+          created_at?: string
+          domain?: string | null
+          expires_at?: string | null
+          id?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          plan_id: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_paid?: number
+          billing_cycle?: string
+          cpanel_url?: string | null
+          cpanel_username?: string | null
+          created_at?: string
+          domain?: string | null
+          expires_at?: string | null
+          id?: string
+          payment_method?: string | null
+          payment_reference?: string | null
+          plan_id?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hosting_orders_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "hosting_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hosting_plans: {
+        Row: {
+          bandwidth_gb: number
+          created_at: string
+          databases: number
+          description: string | null
+          disk_space_gb: number
+          email_accounts: number
+          features: Json | null
+          id: string
+          is_active: boolean
+          name: string
+          price_monthly: number
+          price_yearly: number | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          bandwidth_gb?: number
+          created_at?: string
+          databases?: number
+          description?: string | null
+          disk_space_gb?: number
+          email_accounts?: number
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          name: string
+          price_monthly: number
+          price_yearly?: number | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          bandwidth_gb?: number
+          created_at?: string
+          databases?: number
+          description?: string | null
+          disk_space_gb?: number
+          email_accounts?: number
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_monthly?: number
+          price_yearly?: number | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
