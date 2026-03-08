@@ -1,32 +1,74 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 
 export default function ClientLoginPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        navigate("/client/dashboard");
+      }
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate("/client/dashboard");
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isRegister && form.password !== form.confirmPassword) {
       toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+
+    if (isRegister) {
+      const { error } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: {
+          data: { full_name: form.name, phone: form.phone },
+          emailRedirectTo: window.location.origin,
+        },
+      });
       setLoading(false);
-      toast({ title: isRegister ? "Registration" : "Login", description: "Backend integration pending. Connect WHMCS API to enable authentication." });
-    }, 1000);
+      if (error) {
+        toast({ title: "Registration failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Account created!", description: "Please check your email to verify your account before signing in." });
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+      setLoading(false);
+      if (error) {
+        toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      }
+    }
   };
 
-  const handleGoogleSignIn = () => {
-    toast({ title: "Google Sign-In", description: "Backend integration pending. Connect OAuth provider to enable Google authentication." });
+  const handleGoogleSignIn = async () => {
+    const { error } = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (error) {
+      toast({ title: "Google Sign-In failed", description: String(error), variant: "destructive" });
+    }
   };
 
   return (
@@ -66,7 +108,6 @@ export default function ClientLoginPage() {
       {/* Right - Form Panel */}
       <div className="flex-1 flex items-center justify-center px-4 py-8 sm:px-8">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2">
               <div className="w-10 h-10 rounded-sm gradient-primary flex items-center justify-center">
@@ -83,7 +124,6 @@ export default function ClientLoginPage() {
             </p>
           </div>
 
-          {/* Google Sign-In */}
           <Button variant="outline" onClick={handleGoogleSignIn} className="w-full h-12 rounded-sm mb-6 font-medium text-sm border-2 hover:bg-muted/50 transition-colors">
             <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />

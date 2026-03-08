@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Check, ShoppingCart, Zap } from "lucide-react";
+import { Check, ShoppingCart, Zap, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 interface HostingPlan {
@@ -35,7 +36,9 @@ export default function ClientHosting() {
   const [orders, setOrders] = useState<HostingOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [purchasing, setPurchasing] = useState<string | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function load() {
@@ -52,12 +55,37 @@ export default function ClientHosting() {
     load();
   }, []);
 
-  const handlePurchase = (plan: HostingPlan) => {
-    // This will trigger the payment flow (M-Pesa / Stripe) once integrated
-    toast({
-      title: "Payment Integration Coming Soon",
-      description: `To purchase the ${plan.name} plan (KSh ${billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly}/${billingCycle === "monthly" ? "mo" : "yr"}), payment via M-Pesa or Stripe will be available shortly.`,
+  const handlePurchase = async (plan: HostingPlan) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setPurchasing(plan.id);
+    const price = billingCycle === "monthly" ? plan.price_monthly : (plan.price_yearly || plan.price_monthly * 10);
+    const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+
+    // Create hosting order
+    await supabase.from("hosting_orders").insert({
+      user_id: user.id,
+      plan_id: plan.id,
+      billing_cycle: billingCycle,
+      amount_paid: 0,
+      status: "pending",
     });
+
+    // Create invoice
+    await supabase.from("invoices").insert({
+      invoice_number: invoiceNumber,
+      user_id: user.id,
+      service_type: "hosting",
+      service_description: `${plan.name} Hosting Plan (${billingCycle})`,
+      amount: price,
+      status: "unpaid",
+      due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    setPurchasing(null);
+    toast({ title: "Order created!", description: "Redirecting to payment..." });
+    navigate("/client/dashboard/payments");
   };
 
   if (loading) {
@@ -159,10 +187,11 @@ export default function ClientHosting() {
               </div>
               <Button
                 onClick={() => handlePurchase(plan)}
+                disabled={purchasing === plan.id}
                 className={isPopular ? "gradient-primary text-primary-foreground border-0" : ""}
                 variant={isPopular ? "default" : "outline"}
               >
-                <ShoppingCart className="w-4 h-4 mr-2" />
+                {purchasing === plan.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
                 Purchase Plan
               </Button>
             </div>

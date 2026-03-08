@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      contact_messages: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          is_read: boolean | null
+          message: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          is_read?: boolean | null
+          message: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      domains: {
+        Row: {
+          auto_renew: boolean | null
+          created_at: string | null
+          expires_at: string | null
+          extension: string
+          id: string
+          name: string
+          nameservers: string | null
+          registered_at: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          auto_renew?: boolean | null
+          created_at?: string | null
+          expires_at?: string | null
+          extension: string
+          id?: string
+          name: string
+          nameservers?: string | null
+          registered_at?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          auto_renew?: boolean | null
+          created_at?: string | null
+          expires_at?: string | null
+          extension?: string
+          id?: string
+          name?: string
+          nameservers?: string | null
+          registered_at?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       hosting_orders: {
         Row: {
           amount_paid: number
@@ -126,6 +195,199 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      invoices: {
+        Row: {
+          amount: number
+          due_at: string
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          paid_at: string | null
+          service_description: string | null
+          service_type: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          due_at: string
+          id?: string
+          invoice_number: string
+          issued_at?: string | null
+          paid_at?: string | null
+          service_description?: string | null
+          service_type: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          due_at?: string
+          id?: string
+          invoice_number?: string
+          issued_at?: string | null
+          paid_at?: string | null
+          service_description?: string | null
+          service_type?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          currency: string | null
+          id: string
+          invoice_id: string | null
+          method: string
+          mpesa_receipt: string | null
+          paid_at: string | null
+          reference: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          invoice_id?: string | null
+          method: string
+          mpesa_receipt?: string | null
+          paid_at?: string | null
+          reference?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          invoice_id?: string | null
+          method?: string
+          mpesa_receipt?: string | null
+          paid_at?: string | null
+          reference?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          company: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string | null
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id: string
+          name?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      support_tickets: {
+        Row: {
+          created_at: string | null
+          department: string
+          id: string
+          priority: string | null
+          status: string | null
+          subject: string
+          ticket_number: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          department: string
+          id?: string
+          priority?: string | null
+          status?: string | null
+          subject: string
+          ticket_number: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          department?: string
+          id?: string
+          priority?: string | null
+          status?: string | null
+          subject?: string
+          ticket_number?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ticket_replies: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_staff: boolean | null
+          message: string
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_staff?: boolean | null
+          message: string
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_staff?: boolean | null
+          message?: string
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_replies_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
