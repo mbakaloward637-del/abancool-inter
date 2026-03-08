@@ -187,10 +187,11 @@ export default function ClientHosting() {
               </div>
               <Button
                 onClick={() => handlePurchase(plan)}
+                disabled={purchasing === plan.id}
                 className={isPopular ? "gradient-primary text-primary-foreground border-0" : ""}
                 variant={isPopular ? "default" : "outline"}
               >
-                <ShoppingCart className="w-4 h-4 mr-2" />
+                {purchasing === plan.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
                 Purchase Plan
               </Button>
             </div>
