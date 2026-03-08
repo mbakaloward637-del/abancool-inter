@@ -1,40 +1,45 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, ArrowRight, Shield, Zap, Clock, Headphones, Star } from "lucide-react";
+import { CheckCircle2, ArrowRight, Shield, Zap, Clock, Headphones, Star, Server, Globe, Lock, HardDrive } from "lucide-react";
 import datacenter from "@/assets/hero-datacenter.jpg";
 
 const plans = [
   {
     name: "Starter",
-    price: "500",
-    monthly: "50",
+    price: "420",
+    period: "month",
+    yearly: "5,040",
     features: ["2GB SSD Storage", "10GB Bandwidth", "Free SSL Certificate", "2 Email Accounts", "1 Website", "cPanel Access", "Weekly Backups"],
   },
   {
     name: "Basic",
-    price: "1,000",
-    monthly: "100",
-    features: ["5GB SSD Storage", "20GB Bandwidth", "Free SSL Certificate", "5 Email Accounts", "2 Websites", "cPanel Access", "Weekly Backups"],
+    price: "800",
+    period: "month",
+    yearly: "9,600",
+    features: ["5GB SSD Storage", "20GB Bandwidth", "Free SSL Certificate", "5 Email Accounts", "2 Websites", "cPanel Access", "Weekly Backups", "Free Domain"],
   },
   {
     name: "Business",
-    price: "2,000",
-    monthly: "200",
+    price: "3,000",
+    period: "year",
+    monthly: "250",
     popular: true,
-    features: ["15GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "5 Websites", "cPanel Access", "Daily Backups", "Free Domain"],
+    features: ["15GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "5 Websites", "cPanel Access", "Daily Backups", "Free Domain", "Staging Environment"],
   },
   {
     name: "Professional",
-    price: "3,000",
-    monthly: "300",
-    features: ["30GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "10 Websites", "cPanel Access", "Daily Backups", "Staging Environment"],
+    price: "3,500",
+    period: "year",
+    monthly: "292",
+    features: ["30GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "10 Websites", "cPanel Access", "Daily Backups", "Free Domain", "Staging Environment", "Priority Support"],
   },
   {
     name: "Enterprise",
-    price: "4,500",
-    monthly: "450",
-    features: ["60GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "Unlimited Websites", "cPanel Access", "Real-time Backups", "Priority Support", "Dedicated IP"],
+    price: "5,000",
+    period: "year",
+    monthly: "417",
+    features: ["60GB SSD Storage", "Unlimited Bandwidth", "Free SSL Certificate", "Unlimited Email Accounts", "Unlimited Websites", "cPanel & WHM Access", "Real-time Backups", "Free Domain", "Dedicated IP", "Priority Support", "DDoS Protection"],
   },
 ];
 
@@ -43,6 +48,13 @@ const features = [
   { icon: Shield, title: "DDoS Protection", desc: "Enterprise-grade security for your websites" },
   { icon: Clock, title: "99.9% Uptime", desc: "Guaranteed uptime with redundant infrastructure" },
   { icon: Headphones, title: "24/7 Support", desc: "Expert support team available around the clock" },
+];
+
+const whyUs = [
+  { icon: Server, title: "Tier-3 Data Centers", desc: "Hosted in world-class data centers with redundant power and cooling systems for maximum reliability." },
+  { icon: Lock, title: "Free SSL & Security", desc: "Every plan includes free Let's Encrypt SSL, firewall protection, and malware scanning." },
+  { icon: HardDrive, title: "NVMe SSD Storage", desc: "Up to 10x faster than traditional SSDs. Your websites load instantly with NVMe technology." },
+  { icon: Globe, title: "Global CDN", desc: "Content delivery network ensures your website loads fast for visitors worldwide." },
 ];
 
 const fadeUp = {
@@ -54,10 +66,10 @@ export default function HostingPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative min-h-[50vh] flex items-center overflow-hidden">
+      <section className="relative min-h-[60vh] flex items-center overflow-hidden">
         <div className="absolute inset-0">
           <img src={datacenter} alt="Data center" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-hero/75" />
+          <div className="absolute inset-0 bg-hero/80" />
         </div>
         <div className="relative container-max px-4 lg:px-8 py-20">
           <span className="section-label !text-accent">Web Hosting</span>
@@ -65,8 +77,20 @@ export default function HostingPage() {
             Premium <span className="text-accent">Hosting</span> Plans
           </h1>
           <p className="text-hero-foreground/70 text-lg max-w-2xl mt-4">
-            Fast, secure, and reliable SSD hosting with 99.9% uptime. Starting from KSh 500/year.
+            Fast, secure, and reliable SSD hosting with 99.9% uptime. Starting from KSh 420/month. Ready for WHMCS backend integration.
           </p>
+          <div className="flex flex-wrap gap-4 mt-8">
+            <a href="#plans">
+              <Button className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold uppercase text-sm tracking-wider px-8 h-12 rounded-sm">
+                View Plans <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </a>
+            <Link to="/contact">
+              <Button variant="outline" className="border-hero-foreground/30 text-hero-foreground hover:bg-hero-foreground/10 font-semibold uppercase text-sm tracking-wider px-8 h-12 rounded-sm">
+                Talk to Sales
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -88,7 +112,7 @@ export default function HostingPage() {
       </section>
 
       {/* Plans */}
-      <section className="section-padding bg-background">
+      <section id="plans" className="section-padding bg-background">
         <div className="container-max">
           <div className="text-center mb-12">
             <span className="section-label justify-center">Choose Your Plan</span>
@@ -120,11 +144,18 @@ export default function HostingPage() {
                   <h3 className="font-heading font-bold text-xl mb-1">{plan.name}</h3>
                   <div className="flex items-baseline gap-1 mb-1">
                     <span className="text-3xl font-heading font-bold text-accent">KSh {plan.price}</span>
-                    <span className={`text-sm ${plan.popular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>/year</span>
+                    <span className={`text-sm ${plan.popular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>/{plan.period}</span>
                   </div>
-                  <div className={`text-xs mb-6 ${plan.popular ? "text-hero-foreground/40" : "text-muted-foreground/60"}`}>
-                    or KSh {plan.monthly}/month
-                  </div>
+                  {plan.monthly && (
+                    <div className={`text-xs mb-6 ${plan.popular ? "text-hero-foreground/40" : "text-muted-foreground/60"}`}>
+                      or KSh {plan.monthly}/month
+                    </div>
+                  )}
+                  {plan.yearly && (
+                    <div className={`text-xs mb-6 ${plan.popular ? "text-hero-foreground/40" : "text-muted-foreground/60"}`}>
+                      or KSh {plan.yearly}/year
+                    </div>
+                  )}
                 </div>
                 <ul className="space-y-2 mb-6 flex-1">
                   {plan.features.map((f) => (
@@ -146,8 +177,30 @@ export default function HostingPage() {
         </div>
       </section>
 
-      {/* Comparison table */}
+      {/* Why Choose Us */}
       <section className="section-padding bg-section-alt">
+        <div className="container-max">
+          <div className="text-center mb-12">
+            <span className="section-label justify-center">Why Abancool Hosting</span>
+            <h2 className="font-heading text-3xl font-bold">Built for <span className="text-accent">Performance</span></h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {whyUs.map((item, i) => (
+              <motion.div key={item.title} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={i} variants={fadeUp}
+                className="bg-card border rounded-sm p-6 hover-lift">
+                <div className="w-14 h-14 rounded-sm bg-accent/10 flex items-center justify-center mb-4">
+                  <item.icon className="w-7 h-7 text-accent" />
+                </div>
+                <h3 className="font-heading font-bold mb-2">{item.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Comparison table */}
+      <section className="section-padding bg-background">
         <div className="container-max">
           <div className="text-center mb-12">
             <span className="section-label justify-center">Compare</span>
@@ -171,8 +224,10 @@ export default function HostingPage() {
                   { feature: "Email Accounts", values: ["2", "5", "Unlimited", "Unlimited", "Unlimited"] },
                   { feature: "Free SSL", values: ["✓", "✓", "✓", "✓", "✓"] },
                   { feature: "Daily Backups", values: ["✗", "✗", "✓", "✓", "✓"] },
-                  { feature: "Free Domain", values: ["✗", "✗", "✓", "✓", "✓"] },
-                  { feature: "Priority Support", values: ["✗", "✗", "✗", "✗", "✓"] },
+                  { feature: "Free Domain", values: ["✗", "✓", "✓", "✓", "✓"] },
+                  { feature: "Staging", values: ["✗", "✗", "✓", "✓", "✓"] },
+                  { feature: "Priority Support", values: ["✗", "✗", "✗", "✓", "✓"] },
+                  { feature: "Dedicated IP", values: ["✗", "✗", "✗", "✗", "✓"] },
                 ].map((row) => (
                   <tr key={row.feature} className="border-b last:border-0">
                     <td className="p-4 font-medium">{row.feature}</td>
