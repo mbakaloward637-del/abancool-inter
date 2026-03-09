@@ -5,8 +5,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 // ─── Configuration ───────────────────────────────────────────────
-// Change this to your deployed PHP backend URL
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.abancool.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://abancool.com/backend";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
@@ -42,7 +41,7 @@ async function fetchWithRetry(
   for (let i = 0; i <= retries; i++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeout = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch(url, {
         ...options,
@@ -50,12 +49,10 @@ async function fetchWithRetry(
       });
       clearTimeout(timeout);
 
-      // Don't retry on auth errors or validation errors
       if (response.status === 401 || response.status === 400 || response.status === 403) {
         return response;
       }
 
-      // Retry on server errors
       if (response.status >= 500 && i < retries) {
         lastError = new Error(`Server error: ${response.status}`);
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * (i + 1)));
@@ -76,9 +73,6 @@ async function fetchWithRetry(
 
 // ─── Public API Methods ──────────────────────────────────────────
 
-/**
- * GET request to the PHP backend.
- */
 export async function apiGet<T = any>(endpoint: string): Promise<ApiResponse<T>> {
   try {
     const headers = await getAuthHeaders();
@@ -98,9 +92,6 @@ export async function apiGet<T = any>(endpoint: string): Promise<ApiResponse<T>>
   }
 }
 
-/**
- * POST request to the PHP backend.
- */
 export async function apiPost<T = any>(endpoint: string, body: Record<string, any>): Promise<ApiResponse<T>> {
   try {
     const headers = await getAuthHeaders();
@@ -117,6 +108,24 @@ export async function apiPost<T = any>(endpoint: string, body: Record<string, an
     return { data, error: null, status: res.status, source: "api" };
   } catch (err: any) {
     console.warn(`API POST ${endpoint} failed:`, err.message);
+    return { data: null, error: err.message, status: 0, source: "api" };
+  }
+}
+
+/** Public POST (no auth header) */
+export async function apiPublicPost<T = any>(endpoint: string, body: Record<string, any>): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetchWithRetry(`${API_BASE}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { data: null, error: data.error || `HTTP ${res.status}`, status: res.status, source: "api" };
+    }
+    return { data, error: null, status: res.status, source: "api" };
+  } catch (err: any) {
     return { data: null, error: err.message, status: 0, source: "api" };
   }
 }
@@ -150,12 +159,8 @@ export interface SsoResponse {
   panel: "cpanel" | "directadmin";
 }
 
-/**
- * Check if user has active hosting. Falls back to Supabase.
- */
 export async function checkHostingStatus(): Promise<PanelStatus> {
   const res = await apiGet<PanelStatus>("/api/cpanel/status");
-
   if (res.data) return res.data;
 
   // Fallback: query Supabase directly
@@ -183,15 +188,10 @@ export async function checkHostingStatus(): Promise<PanelStatus> {
   };
 }
 
-/**
- * Get real-time panel stats. Falls back to plan-based estimates.
- */
 export async function getPanelStats(): Promise<PanelStats | null> {
   const res = await apiGet<PanelStats>("/api/cpanel/stats");
-
   if (res.data) return res.data;
 
-  // Fallback: build from Supabase data
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -220,9 +220,6 @@ export async function getPanelStats(): Promise<PanelStats | null> {
   };
 }
 
-/**
- * Get SSO auto-login URL.
- */
 export async function getSsoUrl(): Promise<SsoResponse | null> {
   const res = await apiGet<SsoResponse>("/api/cpanel/sso");
   return res.data;
@@ -242,10 +239,6 @@ export interface StripeIntentResponse {
   payment_intent_id: string;
 }
 
-/**
- * Initiate M-Pesa STK Push via PHP backend.
- * Falls back to creating a local pending payment record.
- */
 export async function initiateMpesaPayment(invoiceId: string, phone: string): Promise<MpesaResponse> {
   const res = await apiPost<MpesaResponse>("/api/payments/mpesa", {
     invoice_id: invoiceId,
@@ -254,7 +247,6 @@ export async function initiateMpesaPayment(invoiceId: string, phone: string): Pr
 
   if (res.data?.success) return res.data;
 
-  // If PHP backend is unavailable, create pending payment locally
   if (res.status === 0) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "Not authenticated" };
@@ -286,9 +278,6 @@ export async function initiateMpesaPayment(invoiceId: string, phone: string): Pr
   return { success: false, error: res.error || "Payment failed" };
 }
 
-/**
- * Create Stripe PaymentIntent via PHP backend.
- */
 export async function createStripeIntent(invoiceId: string): Promise<StripeIntentResponse | null> {
   const res = await apiPost<StripeIntentResponse>("/api/payments/stripe/intent", {
     invoice_id: invoiceId,
@@ -296,9 +285,6 @@ export async function createStripeIntent(invoiceId: string): Promise<StripeInten
   return res.data;
 }
 
-/**
- * Poll invoice status until paid or timeout.
- */
 export function pollInvoiceStatus(
   invoiceId: string,
   onPaid: () => void,
@@ -322,8 +308,33 @@ export function pollInvoiceStatus(
     }
   }, intervalMs);
 
-  // Return cleanup function
   return () => clearInterval(interval);
+}
+
+// ─── Hosting Order API ──────────────────────────────────────────
+
+export interface OrderResponse {
+  success: boolean;
+  order_id: string;
+  invoice_id: string;
+  invoice_number: string;
+  amount: number;
+}
+
+export async function createHostingOrder(planId: string, domain: string, billingCycle: string): Promise<OrderResponse | null> {
+  const res = await apiPost<OrderResponse>("/api/hosting/order", {
+    plan_id: planId,
+    domain,
+    billing_cycle: billingCycle,
+  });
+  return res.data;
+}
+
+// ─── Contact Form ────────────────────────────────────────────────
+
+export async function submitContactForm(data: { name: string; email: string; phone?: string; message: string }): Promise<boolean> {
+  const res = await apiPublicPost("/api/contact/submit", data);
+  return !!res.data?.success;
 }
 
 // ─── Dashboard Stats ─────────────────────────────────────────────
