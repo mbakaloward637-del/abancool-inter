@@ -8,20 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-
-const API_BASE = "https://api.abancool.com";
-
-async function getAuthHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return {
-    Authorization: `Bearer ${session?.access_token ?? ""}`,
-    "Content-Type": "application/json",
-  };
-}
+import { initiateMpesaPayment, createStripeIntent, pollInvoiceStatus } from "@/lib/api";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
-  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.5 } }),
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] as const } }),
 };
 
 export default function ClientPayments() {
@@ -33,7 +24,7 @@ export default function ClientPayments() {
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [processing, setProcessing] = useState(false);
   const [polling, setPolling] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCleanupRef = useRef<(() => void) | null>(null);
   const { toast } = useToast();
 
   const loadData = async () => {
@@ -48,26 +39,8 @@ export default function ClientPayments() {
 
   useEffect(() => {
     loadData();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => { pollCleanupRef.current?.(); };
   }, []);
-
-  const startPolling = (invoiceId: string) => {
-    setPolling(invoiceId);
-    let attempts = 0;
-    pollRef.current = setInterval(async () => {
-      attempts++;
-      const { data } = await supabase.from("invoices").select("status").eq("id", invoiceId).maybeSingle();
-      if (data?.status === "paid") {
-        if (pollRef.current) clearInterval(pollRef.current);
-        setPolling(null);
-        toast({ title: "Payment Confirmed! ✅", description: "Your hosting is being activated." });
-        loadData();
-      } else if (attempts >= 24) {
-        if (pollRef.current) clearInterval(pollRef.current);
-        setPolling(null);
-      }
-    }, 5000);
-  };
 
   const handleMpesaPay = async (invoice: any) => {
     if (!mpesaPhone || mpesaPhone.length < 10) {
@@ -75,67 +48,49 @@ export default function ClientPayments() {
       return;
     }
     setProcessing(true);
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/payments/mpesa`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ invoice_id: invoice.id, phone: mpesaPhone }),
-      });
-      const data = await res.json();
 
-      if (data.success) {
-        toast({ title: "STK Push Sent 📲", description: "Check your phone for the M-Pesa payment prompt." });
-        setPayingInvoice(null);
-        startPolling(invoice.id);
-      } else {
-        toast({ title: "Payment Failed", description: data.error || "Try again.", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Error", description: "Could not reach payment server.", variant: "destructive" });
-    } finally {
-      setProcessing(false);
+    const result = await initiateMpesaPayment(invoice.id, mpesaPhone);
+
+    if (result.success) {
+      toast({ title: "STK Push Sent 📲", description: result.message || "Check your phone for the M-Pesa payment prompt." });
+      setPayingInvoice(null);
+      setPolling(invoice.id);
+
+      // Start polling
+      pollCleanupRef.current = pollInvoiceStatus(invoice.id, () => {
+        setPolling(null);
+        toast({ title: "Payment Confirmed! ✅", description: "Your hosting is being activated." });
+        loadData();
+      });
+    } else {
+      toast({ title: "Payment Failed", description: result.error || "Try again.", variant: "destructive" });
     }
+    setProcessing(false);
   };
 
   const handleStripePay = async (invoice: any) => {
     setProcessing(true);
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/payments/stripe/intent`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ invoice_id: invoice.id }),
-      });
-      const data = await res.json();
+    const intent = await createStripeIntent(invoice.id);
 
-      if (data.client_secret) {
-        toast({ title: "Stripe Ready", description: "Card payment form loading..." });
-      } else {
-        toast({ title: "Payment Failed", description: data.error || "Try again.", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Error", description: "Could not reach payment server.", variant: "destructive" });
-    } finally {
-      setProcessing(false);
-      setPayingInvoice(null);
+    if (intent?.client_secret) {
+      toast({ title: "Stripe Ready", description: "Card payment form loading..." });
+      // TODO: Integrate Stripe.js Elements here with intent.client_secret
+    } else {
+      toast({ title: "Payment Failed", description: "Could not create payment intent.", variant: "destructive" });
     }
+    setProcessing(false);
+    setPayingInvoice(null);
   };
 
   const totalPaid = payments.filter(p => p.status === "completed").reduce((s, p) => s + Number(p.amount), 0);
   const totalPending = unpaidInvoices.reduce((s, i) => s + Number(i.amount), 0);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-accent" />
-      </div>
-    );
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
   }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="font-heading text-3xl font-bold">Payments</h1>
         <p className="text-muted-foreground mt-1">Manage your invoices and payment methods.</p>
@@ -148,14 +103,8 @@ export default function ClientPayments() {
           { label: "Pending", value: `KSh ${totalPending.toLocaleString()}`, icon: Clock, color: "text-amber-500", glow: "bg-amber-500/10", desc: `${unpaidInvoices.length} invoices` },
           { label: "Payment Methods", value: "3 Active", icon: CreditCard, color: "text-primary", glow: "bg-primary/10", desc: "M-Pesa, Card, Bank" },
         ].map((card, i) => (
-          <motion.div
-            key={card.label}
-            custom={i}
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            className="group relative overflow-hidden rounded-2xl bg-card border border-border/50 p-6 hover-lift"
-          >
+          <motion.div key={card.label} custom={i} initial="hidden" animate="visible" variants={fadeUp}
+            className="group relative overflow-hidden rounded-2xl bg-card border border-border/50 p-6 hover-lift">
             <div className={`absolute -top-8 -right-8 w-24 h-24 rounded-full ${card.glow} blur-2xl opacity-40 group-hover:opacity-80 transition-opacity`} />
             <div className="relative">
               <div className={`w-11 h-11 rounded-xl ${card.glow} flex items-center justify-center mb-4`}>
@@ -170,12 +119,8 @@ export default function ClientPayments() {
       </div>
 
       {/* Payment Methods */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="rounded-2xl bg-card border border-border/50 p-6"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="rounded-2xl bg-card border border-border/50 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
             <Shield className="w-4 h-4 text-primary" />
@@ -209,12 +154,8 @@ export default function ClientPayments() {
 
       {/* Unpaid Invoices */}
       {unpaidInvoices.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="rounded-2xl bg-card border border-amber-200/50 overflow-hidden"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+          className="rounded-2xl bg-card border border-amber-200/50 overflow-hidden">
           <div className="p-6 border-b border-border/50 flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
               <Receipt className="w-4 h-4 text-amber-600" />
@@ -224,9 +165,7 @@ export default function ClientPayments() {
               <p className="text-xs text-muted-foreground">Pay now to activate your services</p>
             </div>
             <div className="ml-auto">
-              <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-xs font-semibold">
-                {unpaidInvoices.length} pending
-              </span>
+              <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-xs font-semibold">{unpaidInvoices.length} pending</span>
             </div>
           </div>
           <div className="divide-y divide-border/50">
@@ -248,70 +187,41 @@ export default function ClientPayments() {
                       )}
                     </div>
                   </div>
-
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <div className="text-xl font-heading font-bold text-accent">KSh {Number(inv.amount).toLocaleString()}</div>
                       <div className="text-[10px] text-muted-foreground">Due {new Date(inv.due_at).toLocaleDateString()}</div>
                     </div>
-
                     {payingInvoice?.id === inv.id ? (
                       <div className="space-y-3 p-4 rounded-xl bg-muted/30 border border-border/50 min-w-[280px]">
-                        {/* Method selector */}
                         <div className="flex rounded-lg overflow-hidden border border-border/50">
-                          <button
-                            onClick={() => setPaymentMethod("mpesa")}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${paymentMethod === "mpesa" ? "bg-emerald-500 text-white" : "bg-card text-muted-foreground hover:bg-muted/50"}`}
-                          >
+                          <button onClick={() => setPaymentMethod("mpesa")}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${paymentMethod === "mpesa" ? "bg-emerald-500 text-white" : "bg-card text-muted-foreground hover:bg-muted/50"}`}>
                             <Smartphone className="w-3.5 h-3.5" /> M-Pesa
                           </button>
-                          <button
-                            onClick={() => setPaymentMethod("card")}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${paymentMethod === "card" ? "bg-blue-500 text-white" : "bg-card text-muted-foreground hover:bg-muted/50"}`}
-                          >
+                          <button onClick={() => setPaymentMethod("card")}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${paymentMethod === "card" ? "bg-blue-500 text-white" : "bg-card text-muted-foreground hover:bg-muted/50"}`}>
                             <CreditCard className="w-3.5 h-3.5" /> Card
                           </button>
                         </div>
-
                         {paymentMethod === "mpesa" ? (
                           <div className="space-y-2">
-                            <Input
-                              placeholder="0712345678"
-                              value={mpesaPhone}
-                              onChange={(e) => setMpesaPhone(e.target.value)}
-                              className="h-10 text-sm rounded-lg"
-                            />
-                            <Button
-                              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg h-10"
-                              disabled={processing}
-                              onClick={() => handleMpesaPay(inv)}
-                            >
-                              {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                              Send STK Push
+                            <Input placeholder="0712345678" value={mpesaPhone} onChange={(e) => setMpesaPhone(e.target.value)} className="h-10 text-sm rounded-lg" />
+                            <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg h-10" disabled={processing} onClick={() => handleMpesaPay(inv)}>
+                              {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} Send STK Push
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg h-10"
-                            disabled={processing}
-                            onClick={() => handleStripePay(inv)}
-                          >
-                            {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                            Pay with Card
+                          <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg h-10" disabled={processing} onClick={() => handleStripePay(inv)}>
+                            {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />} Pay with Card
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => setPayingInvoice(null)} className="w-full text-xs">
-                          Cancel
-                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPayingInvoice(null)} className="w-full text-xs">Cancel</Button>
                       </div>
                     ) : (
-                      <Button
-                        onClick={() => { setPayingInvoice(inv); setPaymentMethod("mpesa"); }}
-                        disabled={polling === inv.id}
-                        className="gradient-primary text-primary-foreground border-0 rounded-xl px-6 shadow-md hover:shadow-lg transition-shadow"
-                      >
-                        {polling === inv.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowUpRight className="w-4 h-4 mr-2" />}
-                        Pay Now
+                      <Button onClick={() => { setPayingInvoice(inv); setPaymentMethod("mpesa"); }} disabled={polling === inv.id}
+                        className="gradient-primary text-primary-foreground border-0 rounded-xl px-6 shadow-md hover:shadow-lg transition-shadow">
+                        {polling === inv.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowUpRight className="w-4 h-4 mr-2" />} Pay Now
                       </Button>
                     )}
                   </div>
@@ -323,12 +233,8 @@ export default function ClientPayments() {
       )}
 
       {/* Payment History */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="rounded-2xl bg-card border border-border/50 overflow-hidden"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="rounded-2xl bg-card border border-border/50 overflow-hidden">
         <div className="p-6 border-b border-border/50 flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
             <CreditCard className="w-4 h-4 text-primary" />
@@ -351,20 +257,15 @@ export default function ClientPayments() {
             </thead>
             <tbody>
               {payments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-12 text-center">
-                    <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                      <CreditCard className="w-7 h-7 text-muted-foreground/40" />
-                    </div>
-                    <p className="font-medium text-muted-foreground">No payments yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Payments will appear here after you make a transaction</p>
-                  </td>
-                </tr>
+                <tr><td colSpan={5} className="p-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                    <CreditCard className="w-7 h-7 text-muted-foreground/40" />
+                  </div>
+                  <p className="font-medium text-muted-foreground">No payments yet</p>
+                </td></tr>
               ) : payments.map((p: any) => (
                 <tr key={p.id} className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors">
-                  <td className="p-4">
-                    <span className="font-mono text-xs bg-muted/50 px-2 py-1 rounded">{p.mpesa_receipt || p.reference || "—"}</span>
-                  </td>
+                  <td className="p-4"><span className="font-mono text-xs bg-muted/50 px-2 py-1 rounded">{p.mpesa_receipt || p.reference || "—"}</span></td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       {p.method === "mpesa" ? <Smartphone className="w-3.5 h-3.5 text-emerald-500" /> : <CreditCard className="w-3.5 h-3.5 text-blue-500" />}
@@ -378,9 +279,7 @@ export default function ClientPayments() {
                       p.status === "pending" ? "bg-amber-500/10 text-amber-600 border-amber-200" :
                       "bg-red-500/10 text-red-600 border-red-200"
                     }`}>
-                      {p.status === "completed" ? <CheckCircle2 className="w-3 h-3" /> :
-                       p.status === "pending" ? <Clock className="w-3 h-3" /> :
-                       <AlertCircle className="w-3 h-3" />}
+                      {p.status === "completed" ? <CheckCircle2 className="w-3 h-3" /> : p.status === "pending" ? <Clock className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                       {p.status}
                     </span>
                   </td>
