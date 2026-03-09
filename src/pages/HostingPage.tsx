@@ -249,16 +249,16 @@ export default function HostingPage() {
               </thead>
               <tbody>
                 {[
-                  { feature: "Storage", values: ["2GB", "5GB", "15GB", "30GB", "60GB"] },
-                  { feature: "Bandwidth", values: ["10GB", "20GB", "Unlimited", "Unlimited", "Unlimited"] },
-                  { feature: "Websites", values: ["1", "2", "5", "10", "Unlimited"] },
-                  { feature: "Email Accounts", values: ["2", "5", "Unlimited", "Unlimited", "Unlimited"] },
-                  { feature: "Free SSL", values: ["✓", "✓", "✓", "✓", "✓"] },
-                  { feature: "Daily Backups", values: ["✗", "✗", "✓", "✓", "✓"] },
-                  { feature: "Free Domain", values: ["✗", "✓", "✓", "✓", "✓"] },
-                  { feature: "Staging", values: ["✗", "✗", "✓", "✓", "✓"] },
-                  { feature: "Priority Support", values: ["✗", "✗", "✗", "✓", "✓"] },
-                  { feature: "Dedicated IP", values: ["✗", "✗", "✗", "✗", "✓"] },
+                  { feature: "Storage", values: ["30GB NVMe", "60GB NVMe", "80GB NVMe", "Unlimited NVMe"] },
+                  { feature: "Websites", values: ["1", "5", "Unlimited", "Unlimited"] },
+                  { feature: "Email Accounts", values: ["10", "15", "Unlimited", "Unlimited"] },
+                  { feature: "Databases", values: ["5", "10", "Unlimited", "Unlimited"] },
+                  { feature: "Free SSL", values: ["✓", "✓", "✓", "✓"] },
+                  { feature: "LiteSpeed Server", values: ["✓", "✓", "✓", "✓"] },
+                  { feature: "Website Builder", values: ["✓", "✓", "✓", "✓"] },
+                  { feature: "Softaculous", values: ["✓", "✓", "✓", "✓"] },
+                  { feature: "Daily Backups", values: ["✗", "✓", "✓", "✓"] },
+                  { feature: "Priority Support", values: ["✗", "✗", "✗", "✓"] },
                 ].map((row) => (
                   <tr key={row.feature} className="border-b last:border-0">
                     <td className="p-4 font-medium">{row.feature}</td>
