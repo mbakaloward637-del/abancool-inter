@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchInvoices } from "@/lib/whmcs-api";
-import { FileText, ExternalLink, Loader2 } from "lucide-react";
+import { FileText, Loader2, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function ClientBilling() {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -82,19 +83,18 @@ export default function ClientBilling() {
                     <td className="px-6 py-4 font-medium">#{inv.invoicenum || inv.id}</td>
                     <td className="px-6 py-4 text-muted-foreground">{inv.date}</td>
                     <td className="px-6 py-4 text-muted-foreground">{inv.duedate}</td>
-                    <td className="px-6 py-4 font-medium">KES {inv.total}</td>
+                    <td className="px-6 py-4 font-medium">{inv.currencycode || "KES"} {inv.total}</td>
                     <td className="px-6 py-4">
                       <Badge variant="outline" className={statusColor(inv.status)}>{inv.status}</Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <a
-                        href={`https://abancool.com/clients/viewinvoice.php?id=${inv.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-accent hover:underline text-sm font-medium"
-                      >
-                        {inv.status?.toLowerCase() === "unpaid" ? "Pay Now" : "View"} <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                      {inv.status?.toLowerCase() === "unpaid" ? (
+                        <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm text-xs">
+                          <CreditCard className="w-3 h-3 mr-1" /> Pay Now
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Paid</span>
+                      )}
                     </td>
                   </tr>
                 ))}

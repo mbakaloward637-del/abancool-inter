@@ -40,7 +40,7 @@ export default function ClientPortalLayout() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = "https://abancool.com/clients/logout.php";
+    window.location.href = "https://billing.abancool.com/logout.php";
   };
 
   if (loading) {

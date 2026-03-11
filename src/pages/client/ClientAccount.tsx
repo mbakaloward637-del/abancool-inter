@@ -124,7 +124,7 @@ export default function ClientAccount() {
             Save Changes
           </Button>
           <a
-            href="https://abancool.com/clients/clientarea.php?action=changepw"
+            href="https://billing.abancool.com/pwreset.php"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-accent hover:underline"

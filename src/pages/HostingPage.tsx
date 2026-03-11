@@ -1,42 +1,14 @@
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, ArrowRight, Shield, Zap, Clock, Headphones, Star, Server, Globe, Lock, HardDrive } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, ArrowRight, Shield, Zap, Clock, Headphones, Star, Server, Globe, Lock, HardDrive, Loader2 } from "lucide-react";
+import { fetchProducts, createOrder } from "@/lib/whmcs-api";
 import datacenter from "@/assets/hero-datacenter.jpg";
 
-const plans = [
-  {
-    name: "Starter",
-    price: "1,500",
-    period: "year",
-    monthly: "125",
-    features: ["1 Website", "30GB NVMe SSD Storage", "10 Email Accounts", "Free SSL Certificate", "LiteSpeed Server", "Website Builder Included", "Softaculous 1-Click Installer", "Weekly Backups", "5 MySQL Databases"],
-  },
-  {
-    name: "Business",
-    price: "2,500",
-    period: "year",
-    monthly: "209",
-    popular: true,
-    features: ["5 Websites", "60GB NVMe SSD Storage", "15 Email Accounts", "Free SSL Certificate", "LiteSpeed Server", "Website Builder Included", "Softaculous 1-Click Installer", "Daily Backups", "10 MySQL Databases"],
-  },
-  {
-    name: "Premium",
-    price: "4,000",
-    period: "year",
-    monthly: "334",
-    features: ["Unlimited Websites", "80GB NVMe SSD Storage", "Unlimited Email Accounts", "Free SSL Certificates", "LiteSpeed Server", "Website Builder Included", "Softaculous 1-Click Installer", "Daily Backups", "Unlimited Databases"],
-  },
-  {
-    name: "Enterprise",
-    price: "6,000",
-    period: "year",
-    monthly: "500",
-    features: ["Unlimited Websites", "Unlimited NVMe SSD Storage", "Unlimited Email Accounts", "Unlimited Databases", "Free SSL Certificates", "LiteSpeed Server", "Website Builder Included", "Softaculous 1-Click Installer", "Daily Backups", "Priority Support"],
-  },
-];
 const features = [
   { icon: Zap, title: "Lightning Fast", desc: "NVMe SSD storage for blazing-fast load times" },
   { icon: Shield, title: "DDoS Protection", desc: "Enterprise-grade security for your websites" },
@@ -59,37 +31,79 @@ const fadeUp = {
 export default function HostingPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ordering, setOrdering] = useState<string | null>(null);
+  const [orderDomain, setOrderDomain] = useState("");
+  const [orderPid, setOrderPid] = useState<string | null>(null);
 
-  const handleOrderNow = async (plan: typeof plans[0]) => {
+  useEffect(() => {
+    fetchProducts()
+      .then((p) => setProducts(p))
+      .catch((e) => {
+        console.error("Failed to load products:", e);
+        toast({ title: "Error loading plans", description: e.message, variant: "destructive" });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleOrderNow = async (product: any) => {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    // Store selected plan in sessionStorage
-    sessionStorage.setItem("selected_hosting_plan", JSON.stringify(plan));
-    
     if (!user) {
-      toast({ title: "Login required", description: "Please sign in or create an account to order a hosting plan." });
+      toast({ title: "Login required", description: "Please sign in to order a hosting plan." });
       navigate("/client/login");
       return;
     }
+    setOrderPid(product.pid);
+  };
 
-    // User is logged in — create invoice and redirect to payments
-    const price = plan.period === "month" 
-      ? parseInt(plan.price.replace(/,/g, "")) 
-      : parseInt(plan.price.replace(/,/g, ""));
-    const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+  const submitOrder = async () => {
+    if (!orderDomain.trim() || !orderPid) {
+      toast({ title: "Domain required", description: "Please enter a domain for your hosting.", variant: "destructive" });
+      return;
+    }
+    setOrdering(orderPid);
+    try {
+      const result = await createOrder({
+        pid: orderPid,
+        domain: orderDomain.trim(),
+        billingcycle: "annually",
+      });
+      if (result?.result === "success") {
+        toast({ title: "Order placed!", description: `Order #${result.orderid} created. Invoice #${result.invoiceid} generated.` });
+        setOrderPid(null);
+        setOrderDomain("");
+        navigate("/client/billing");
+      } else {
+        toast({ title: "Order failed", description: result?.message || "Please try again.", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Order failed", description: e.message, variant: "destructive" });
+    } finally {
+      setOrdering(null);
+    }
+  };
 
-    await supabase.from("invoices").insert({
-      invoice_number: invoiceNumber,
-      user_id: user.id,
-      service_type: "hosting",
-      service_description: `${plan.name} Hosting Plan (${plan.period}ly)`,
-      amount: price,
-      status: "unpaid",
-      due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    });
+  const getPrice = (product: any) => {
+    const pricing = product.pricing;
+    if (!pricing) return { amount: "0", cycle: "year" };
+    // Try annually first, then monthly
+    if (pricing.KES?.annually) return { amount: pricing.KES.annually, cycle: "year" };
+    if (pricing.USD?.annually) return { amount: pricing.USD.annually, cycle: "year" };
+    if (pricing.KES?.monthly) return { amount: pricing.KES.monthly, cycle: "month" };
+    if (pricing.USD?.monthly) return { amount: pricing.USD.monthly, cycle: "month" };
+    return { amount: "0", cycle: "year" };
+  };
 
-    toast({ title: "Order created!", description: "Redirecting to payment..." });
-    navigate("/client/dashboard/payments");
+  const getFeatures = (product: any): string[] => {
+    const desc = product.description || "";
+    // Try to parse features from description (WHMCS often uses HTML lists)
+    const featureMatch = desc.match(/<li[^>]*>(.*?)<\/li>/gi);
+    if (featureMatch) {
+      return featureMatch.map((f: string) => f.replace(/<[^>]+>/g, "").trim()).filter(Boolean);
+    }
+    // Fallback: split by newlines or commas
+    return desc.split(/\n|<br\s*\/?>/).map((s: string) => s.replace(/<[^>]+>/g, "").trim()).filter(Boolean).slice(0, 8);
   };
 
   return (
@@ -106,7 +120,7 @@ export default function HostingPage() {
             Premium <span className="text-accent">Hosting</span> Plans
           </h1>
           <p className="text-hero-foreground/70 text-lg max-w-2xl mt-4">
-            Fast, secure, and reliable NVMe SSD hosting with LiteSpeed servers and 99.9% uptime. Starting from KSh 1,500/year.
+            Fast, secure, and reliable NVMe SSD hosting with LiteSpeed servers and 99.9% uptime. Powered by enterprise infrastructure.
           </p>
           <div className="flex flex-wrap gap-4 mt-8">
             <a href="#plans">
@@ -140,7 +154,7 @@ export default function HostingPage() {
         </div>
       </section>
 
-      {/* Plans */}
+      {/* Plans from WHMCS */}
       <section id="plans" className="section-padding bg-background">
         <div className="container-max">
           <div className="text-center mb-12">
@@ -148,60 +162,105 @@ export default function HostingPage() {
             <h2 className="font-heading text-3xl md:text-4xl font-bold">
               Hosting <span className="text-accent">Packages</span>
             </h2>
-            <p className="text-muted-foreground mt-3 max-w-lg mx-auto">All plans include free setup, cPanel, and 30-day money back guarantee.</p>
+            <p className="text-muted-foreground mt-3 max-w-lg mx-auto">All plans include free setup, control panel, and 30-day money back guarantee.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 border border-border">
-            {plans.map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                custom={i}
-                variants={fadeUp}
-                className={`p-6 border-r border-b last:border-r-0 flex flex-col ${plan.popular ? "bg-hero text-hero-foreground relative" : "bg-card"}`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-0 left-0 right-0">
-                    <div className="bg-accent text-accent-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 text-center flex items-center justify-center gap-1">
-                      <Star className="w-3 h-3" /> Most Popular
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-accent" />
+              <span className="ml-3 text-muted-foreground">Loading plans from server...</span>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <Server className="w-12 h-12 mx-auto mb-4 opacity-40" />
+              <p>No hosting plans available at the moment.</p>
+            </div>
+          ) : (
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${products.length >= 4 ? "lg:grid-cols-4" : products.length === 3 ? "lg:grid-cols-3" : ""} gap-0 border border-border`}>
+              {products.map((product: any, i: number) => {
+                const price = getPrice(product);
+                const productFeatures = getFeatures(product);
+                const isPopular = i === 1; // Second plan is popular
+                return (
+                  <motion.div
+                    key={product.pid}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    custom={i}
+                    variants={fadeUp}
+                    className={`p-6 border-r border-b last:border-r-0 flex flex-col ${isPopular ? "bg-hero text-hero-foreground relative" : "bg-card"}`}
+                  >
+                    {isPopular && (
+                      <div className="absolute -top-0 left-0 right-0">
+                        <div className="bg-accent text-accent-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 text-center flex items-center justify-center gap-1">
+                          <Star className="w-3 h-3" /> Most Popular
+                        </div>
+                      </div>
+                    )}
+                    <div className={isPopular ? "mt-6" : ""}>
+                      <h3 className="font-heading font-bold text-xl mb-1">{product.name}</h3>
+                      <div className="flex items-baseline gap-1 mb-4">
+                        <span className="text-3xl font-heading font-bold text-accent">{price.amount}</span>
+                        <span className={`text-sm ${isPopular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>/{price.cycle}</span>
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div className={plan.popular ? "mt-6" : ""}>
-                  <h3 className="font-heading font-bold text-xl mb-1">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className="text-3xl font-heading font-bold text-accent">KSh {plan.price}</span>
-                    <span className={`text-sm ${plan.popular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>/{plan.period}</span>
-                  </div>
-                  {plan.monthly && (
-                    <div className={`text-xs mb-6 ${plan.popular ? "text-hero-foreground/40" : "text-muted-foreground/60"}`}>
-                      or KSh {plan.monthly}/month
-                    </div>
-                  )}
-                </div>
-                <ul className="space-y-2 mb-6 flex-1">
-                  {plan.features.map((f) => (
-                    <li key={f} className={`flex items-start gap-2 text-sm ${plan.popular ? "text-hero-foreground/80" : "text-muted-foreground"}`}>
-                      <CheckCircle2 className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button 
-                  onClick={() => handleOrderNow(plan)}
-                  className={`w-full rounded-sm font-semibold uppercase text-xs tracking-wider ${
-                  plan.popular
-                    ? "bg-accent text-accent-foreground hover:bg-accent/90"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90"
-                }`}>
-                  Order Now <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </motion.div>
-            ))}
-          </div>
+                    {productFeatures.length > 0 && (
+                      <ul className="space-y-2 mb-6 flex-1">
+                        {productFeatures.map((f, fi) => (
+                          <li key={fi} className={`flex items-start gap-2 text-sm ${isPopular ? "text-hero-foreground/80" : "text-muted-foreground"}`}>
+                            <CheckCircle2 className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" /> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <Button
+                      onClick={() => handleOrderNow(product)}
+                      className={`w-full rounded-sm font-semibold uppercase text-xs tracking-wider ${
+                        isPopular
+                          ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                          : "bg-primary text-primary-foreground hover:bg-primary/90"
+                      }`}
+                    >
+                      Order Now <ArrowRight className="ml-2 w-4 h-4" />
+                    </Button>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
+
+      {/* Order Modal */}
+      {orderPid && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4" onClick={() => setOrderPid(null)}>
+          <div className="bg-card border rounded-sm w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-heading font-bold text-xl">Complete Your Order</h3>
+            <p className="text-sm text-muted-foreground">
+              Enter the domain name you'd like to use with this hosting plan.
+            </p>
+            <Input
+              placeholder="yourdomain.com"
+              value={orderDomain}
+              onChange={(e) => setOrderDomain(e.target.value)}
+              className="h-12 rounded-sm"
+            />
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setOrderPid(null)} className="flex-1 rounded-sm">
+                Cancel
+              </Button>
+              <Button
+                onClick={submitOrder}
+                disabled={!!ordering}
+                className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm font-semibold"
+              >
+                {ordering ? <Loader2 className="w-4 h-4 animate-spin" /> : "Place Order"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Why Choose Us */}
       <section className="section-padding bg-section-alt">
@@ -221,51 +280,6 @@ export default function HostingPage() {
                 <p className="text-muted-foreground text-sm leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Comparison table */}
-      <section className="section-padding bg-background">
-        <div className="container-max">
-          <div className="text-center mb-12">
-            <span className="section-label justify-center">Compare</span>
-            <h2 className="font-heading text-3xl font-bold">Feature <span className="text-accent">Comparison</span></h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm bg-card border rounded-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-4 font-heading font-bold">Feature</th>
-                  {plans.map((p) => (
-                    <th key={p.name} className={`p-4 font-heading font-bold text-center ${p.popular ? "bg-accent/10 text-accent" : ""}`}>{p.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { feature: "Storage", values: ["30GB NVMe", "60GB NVMe", "80GB NVMe", "Unlimited NVMe"] },
-                  { feature: "Websites", values: ["1", "5", "Unlimited", "Unlimited"] },
-                  { feature: "Email Accounts", values: ["10", "15", "Unlimited", "Unlimited"] },
-                  { feature: "Databases", values: ["5", "10", "Unlimited", "Unlimited"] },
-                  { feature: "Free SSL", values: ["✓", "✓", "✓", "✓"] },
-                  { feature: "LiteSpeed Server", values: ["✓", "✓", "✓", "✓"] },
-                  { feature: "Website Builder", values: ["✓", "✓", "✓", "✓"] },
-                  { feature: "Softaculous", values: ["✓", "✓", "✓", "✓"] },
-                  { feature: "Daily Backups", values: ["✗", "✓", "✓", "✓"] },
-                  { feature: "Priority Support", values: ["✗", "✗", "✗", "✓"] },
-                ].map((row) => (
-                  <tr key={row.feature} className="border-b last:border-0">
-                    <td className="p-4 font-medium">{row.feature}</td>
-                    {row.values.map((v, i) => (
-                      <td key={i} className={`p-4 text-center ${plans[i]?.popular ? "bg-accent/5" : ""} ${v === "✓" ? "text-accent font-bold" : v === "✗" ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
-                        {v}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       </section>

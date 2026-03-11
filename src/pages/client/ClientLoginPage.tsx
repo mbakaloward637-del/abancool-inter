@@ -59,7 +59,7 @@ export default function ClientLoginPage() {
           </div>
 
           {/* WHMCS Login Form */}
-          <form method="post" action="https://abancool.com/clients/dologin.php" className="space-y-4">
+          <form method="post" action="https://billing.abancool.com/dologin.php" className="space-y-4">
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -90,7 +90,7 @@ export default function ClientLoginPage() {
 
             <div className="flex justify-end">
               <a
-                href="https://abancool.com/clients/pwreset.php"
+                href="https://billing.abancool.com/pwreset.php"
                 className="text-xs text-accent hover:underline font-medium"
               >
                 Forgot password?
@@ -108,7 +108,7 @@ export default function ClientLoginPage() {
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account?{" "}
             <a
-              href="https://abancool.com/clients/register.php"
+              href="https://billing.abancool.com/register.php"
               className="text-accent font-semibold hover:underline"
             >
               Create Account

@@ -6,18 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Search, Globe, ArrowRight, Shield, RefreshCw, Lock, Headphones, CheckCircle2, ShoppingCart, Loader2, X, Plus, Minus, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { checkDomainAvailability, registerDomain } from "@/lib/whmcs-api";
 import datacenter from "@/assets/hero-datacenter.jpg";
 
-const extensions = [
-  { ext: ".com", price: 1500, desc: "Most popular worldwide" },
-  { ext: ".net", price: 1600, desc: "Networks & tech" },
-  { ext: ".org", price: 1500, desc: "Organizations & NGOs" },
-  { ext: ".co.ke", price: 1200, desc: "Kenyan businesses" },
-  { ext: ".africa", price: 2200, desc: "Pan-African identity" },
-  { ext: ".tech", price: 2000, desc: "Technology companies" },
-  { ext: ".online", price: 1800, desc: "Online presence" },
-  { ext: ".store", price: 1800, desc: "E-commerce shops" },
-];
+const defaultExtensions = [".com", ".net", ".org", ".co.ke", ".africa", ".tech", ".online", ".store"];
 
 const domainFeatures = [
   { icon: Shield, title: "WHOIS Privacy", desc: "Free domain privacy protection" },
@@ -26,7 +18,7 @@ const domainFeatures = [
   { icon: Headphones, title: "DNS Management", desc: "Full DNS control panel" },
 ];
 
-type SearchResult = { domain: string; ext: string; available: boolean; price: number; premium?: boolean };
+type SearchResult = { domain: string; ext: string; available: boolean; status: string };
 
 export default function DomainsPage() {
   const navigate = useNavigate();
@@ -36,18 +28,16 @@ export default function DomainsPage() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [cart, setCart] = useState<SearchResult[]>([]);
-  const [showRegForm, setShowRegForm] = useState(false);
-  const [regForm, setRegForm] = useState({ firstName: "", lastName: "", email: "", phone: "", company: "", address: "", city: "", country: "Kenya", idNumber: "" });
   const [regYears, setRegYears] = useState<Record<string, number>>({});
+  const [registering, setRegistering] = useState(false);
 
   const cleanDomain = (input: string) => {
     let d = input.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-    // Remove any extension the user typed to get the base name
     const base = d.replace(/\.[a-z.]+$/, "") || d;
     return base;
   };
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback(async () => {
     const base = cleanDomain(query);
     if (!base || base.length < 2) {
       toast({ title: "Invalid domain", description: "Please enter at least 2 characters.", variant: "destructive" });
@@ -55,20 +45,32 @@ export default function DomainsPage() {
     }
     setSearching(true);
     setSearched(false);
+    setResults([]);
 
-    // Simulate search with random availability (ready for real API)
-    setTimeout(() => {
-      const mockResults: SearchResult[] = extensions.map((e) => ({
-        domain: `${base}${e.ext}`,
-        ext: e.ext,
-        available: Math.random() > 0.3,
-        price: e.price,
-        premium: Math.random() > 0.85,
-      }));
-      setResults(mockResults);
-      setSearched(true);
-      setSearching(false);
-    }, 1200);
+    const searchResults: SearchResult[] = [];
+
+    // Check each extension via WHMCS DomainWhois
+    const checks = defaultExtensions.map(async (ext) => {
+      const fullDomain = `${base}${ext}`;
+      try {
+        const data = await checkDomainAvailability(fullDomain);
+        searchResults.push({
+          domain: fullDomain,
+          ext,
+          available: data?.status === "available",
+          status: data?.status || "unknown",
+        });
+      } catch {
+        searchResults.push({ domain: fullDomain, ext, available: false, status: "error" });
+      }
+    });
+
+    await Promise.allSettled(checks);
+    // Sort: available first
+    searchResults.sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
+    setResults(searchResults);
+    setSearched(true);
+    setSearching(false);
   }, [query, toast]);
 
   const addToCart = (r: SearchResult) => {
@@ -91,56 +93,37 @@ export default function DomainsPage() {
     });
   };
 
-  const cartTotal = cart.reduce((s, c) => s + c.price * (regYears[c.domain] || 1), 0);
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegisterDomains = async () => {
     if (cart.length === 0) {
       toast({ title: "Empty cart", description: "Add at least one domain to register.", variant: "destructive" });
       return;
     }
 
-    // Check if user is logged in
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast({ title: "Login required", description: "Please sign in or create an account to proceed with payment." });
-      // Store cart in sessionStorage so we can resume after login
-      sessionStorage.setItem("domain_cart", JSON.stringify({ cart, regYears, regForm, cartTotal }));
+      toast({ title: "Login required", description: "Please sign in to register domains." });
+      sessionStorage.setItem("domain_cart", JSON.stringify({ cart, regYears }));
       navigate("/client/login");
       return;
     }
 
-    // Create domain records and invoice, then redirect to payments
-    const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
-    const domainNames = cart.map(c => c.domain).join(", ");
-
-    // Insert invoice
-    await supabase.from("invoices").insert({
-      invoice_number: invoiceNumber,
-      user_id: user.id,
-      service_type: "domain",
-      service_description: `Domain registration: ${domainNames}`,
-      amount: cartTotal,
-      status: "unpaid",
-      due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-
-    // Insert domain records
-    for (const c of cart) {
-      const ext = c.ext;
-      const name = c.domain.replace(ext, "");
-      await supabase.from("domains").insert({
-        user_id: user.id,
-        name: name,
-        extension: ext,
-        status: "pending",
-        expires_at: new Date(Date.now() + (regYears[c.domain] || 1) * 365 * 24 * 60 * 60 * 1000).toISOString(),
-      });
+    setRegistering(true);
+    try {
+      for (const c of cart) {
+        await registerDomain({
+          domainname: c.domain,
+          regperiod: String(regYears[c.domain] || 1),
+        });
+      }
+      toast({ title: "Domains ordered!", description: "Your domain registration orders have been placed. Check billing for invoices." });
+      setCart([]);
+      setRegYears({});
+      navigate("/client/billing");
+    } catch (e: any) {
+      toast({ title: "Registration failed", description: e.message, variant: "destructive" });
+    } finally {
+      setRegistering(false);
     }
-
-    toast({ title: "Domains reserved!", description: "Redirecting to payment..." });
-    setShowRegForm(false);
-    navigate("/client/dashboard/payments");
   };
 
   return (
@@ -157,7 +140,7 @@ export default function DomainsPage() {
             Find Your Perfect <span className="text-accent">Domain</span>
           </h1>
           <p className="text-hero-foreground/70 text-base sm:text-lg max-w-xl mx-auto mb-8">
-            Establish your online presence with a professional domain name. Starting from KSh 1,200/year.
+            Search and register your ideal domain name instantly. Powered by real-time availability checking.
           </p>
           <div className="max-w-2xl mx-auto">
             <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex flex-col sm:flex-row gap-2 bg-card/10 backdrop-blur-sm p-2 rounded-sm border border-hero-foreground/10">
@@ -175,8 +158,8 @@ export default function DomainsPage() {
               </Button>
             </form>
             <div className="flex flex-wrap justify-center gap-3 mt-4">
-              {[".com", ".co.ke", ".africa", ".tech"].map((ext) => (
-                <button key={ext} onClick={() => { setQuery(cleanDomain(query || "mybusiness") + ext.replace(".", "")); }} className="text-hero-foreground/50 text-sm font-medium hover:text-accent transition-colors">{ext}</button>
+              {defaultExtensions.slice(0, 4).map((ext) => (
+                <span key={ext} className="text-hero-foreground/50 text-sm font-medium">{ext}</span>
               ))}
             </div>
           </div>
@@ -190,11 +173,12 @@ export default function DomainsPage() {
             <div className="container-max px-4 lg:px-8 py-8 sm:py-12">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <h2 className="font-heading text-xl sm:text-2xl font-bold">
-                  Search Results for "<span className="text-accent">{cleanDomain(query)}</span>"
+                  Results for "<span className="text-accent">{cleanDomain(query)}</span>"
                 </h2>
                 {cart.length > 0 && (
-                  <Button onClick={() => setShowRegForm(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm font-semibold text-xs uppercase tracking-wider">
-                    <ShoppingCart className="w-4 h-4 mr-2" /> Checkout ({cart.length})
+                  <Button onClick={handleRegisterDomains} disabled={registering} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm font-semibold text-xs uppercase tracking-wider">
+                    {registering ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
+                    Register ({cart.length})
                   </Button>
                 )}
               </div>
@@ -202,7 +186,7 @@ export default function DomainsPage() {
               {searching ? (
                 <div className="flex items-center justify-center py-12 gap-3">
                   <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                  <span className="text-muted-foreground">Checking availability across all extensions...</span>
+                  <span className="text-muted-foreground">Checking availability via WHMCS...</span>
                 </div>
               ) : (
                 <div className="grid gap-2 sm:gap-3">
@@ -221,24 +205,30 @@ export default function DomainsPage() {
                         <div className="min-w-0">
                           <div className="font-heading font-bold text-sm sm:text-base truncate">{r.domain}</div>
                           <div className="text-xs text-muted-foreground">
-                            {r.available ? (r.premium ? "Premium domain" : "Available") : "Not available"}
+                            {r.available ? "Available" : "Not available"}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-                        <div className="font-heading font-bold text-accent text-sm sm:text-base whitespace-nowrap">
-                          KSh {r.price.toLocaleString()}<span className="text-xs text-muted-foreground font-normal">/yr</span>
-                        </div>
                         {r.available && (
-                          cart.find(c => c.domain === r.domain) ? (
-                            <Button size="sm" variant="outline" onClick={() => removeFromCart(r.domain)} className="rounded-sm text-xs flex-shrink-0">
-                              <X className="w-3 h-3 mr-1" /> Remove
-                            </Button>
-                          ) : (
-                            <Button size="sm" onClick={() => addToCart(r)} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm text-xs flex-shrink-0">
-                              <Plus className="w-3 h-3 mr-1" /> Add
-                            </Button>
-                          )
+                          <>
+                            {cart.find(c => c.domain === r.domain) ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 border rounded-sm">
+                                  <button type="button" onClick={() => updateYears(r.domain, -1)} className="p-1 hover:bg-muted"><Minus className="w-3 h-3" /></button>
+                                  <span className="px-2 text-xs font-medium">{regYears[r.domain] || 1}yr</span>
+                                  <button type="button" onClick={() => updateYears(r.domain, 1)} className="p-1 hover:bg-muted"><Plus className="w-3 h-3" /></button>
+                                </div>
+                                <Button size="sm" variant="outline" onClick={() => removeFromCart(r.domain)} className="rounded-sm text-xs flex-shrink-0">
+                                  <X className="w-3 h-3 mr-1" /> Remove
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button size="sm" onClick={() => addToCart(r)} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm text-xs flex-shrink-0">
+                                <Plus className="w-3 h-3 mr-1" /> Add to Cart
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </motion.div>
@@ -247,109 +237,6 @@ export default function DomainsPage() {
               )}
             </div>
           </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* Registration Form Modal */}
-      <AnimatePresence>
-        {showRegForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4" onClick={() => setShowRegForm(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="bg-card border rounded-sm w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-card border-b p-4 sm:p-6 flex items-center justify-between z-10">
-                <h3 className="font-heading font-bold text-lg sm:text-xl">Domain Registration</h3>
-                <button onClick={() => setShowRegForm(false)} className="p-1 hover:bg-muted rounded-sm"><X className="w-5 h-5" /></button>
-              </div>
-
-              <form onSubmit={handleRegister} className="p-4 sm:p-6 space-y-6">
-                {/* Cart Summary */}
-                <div className="space-y-3">
-                  <h4 className="font-heading font-semibold text-sm uppercase tracking-wider text-muted-foreground">Your Domains</h4>
-                  {cart.map((c) => (
-                    <div key={c.domain} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-muted/30 rounded-sm border">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Globe className="w-4 h-4 text-accent flex-shrink-0" />
-                        <span className="font-medium text-sm truncate">{c.domain}</span>
-                      </div>
-                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                        <div className="flex items-center gap-1 border rounded-sm">
-                          <button type="button" onClick={() => updateYears(c.domain, -1)} className="p-1 hover:bg-muted"><Minus className="w-3 h-3" /></button>
-                          <span className="px-2 text-xs font-medium">{regYears[c.domain] || 1}yr</span>
-                          <button type="button" onClick={() => updateYears(c.domain, 1)} className="p-1 hover:bg-muted"><Plus className="w-3 h-3" /></button>
-                        </div>
-                        <span className="font-bold text-sm text-accent">KSh {(c.price * (regYears[c.domain] || 1)).toLocaleString()}</span>
-                        <button type="button" onClick={() => removeFromCart(c.domain)} className="p-1 text-destructive hover:bg-destructive/10 rounded-sm"><X className="w-3 h-3" /></button>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-2 border-t font-heading">
-                    <span className="font-bold">Total</span>
-                    <span className="font-bold text-accent text-lg">KSh {cartTotal.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Registrant Info */}
-                <div className="space-y-4">
-                  <h4 className="font-heading font-semibold text-sm uppercase tracking-wider text-muted-foreground">Registrant Information</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">First Name *</label>
-                      <Input value={regForm.firstName} onChange={(e) => setRegForm({ ...regForm, firstName: e.target.value })} required placeholder="John" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Last Name *</label>
-                      <Input value={regForm.lastName} onChange={(e) => setRegForm({ ...regForm, lastName: e.target.value })} required placeholder="Doe" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Email Address *</label>
-                      <Input type="email" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} required placeholder="john@example.com" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone Number *</label>
-                      <Input value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} required placeholder="+254 700 000 000" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Company</label>
-                      <Input value={regForm.company} onChange={(e) => setRegForm({ ...regForm, company: e.target.value })} placeholder="Company name" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">ID/Passport Number</label>
-                      <Input value={regForm.idNumber} onChange={(e) => setRegForm({ ...regForm, idNumber: e.target.value })} placeholder="For .co.ke domains" className="rounded-sm" />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Address *</label>
-                      <Input value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })} required placeholder="P.O Box or Street Address" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">City *</label>
-                      <Input value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })} required placeholder="Nairobi" className="rounded-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Country</label>
-                      <Input value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} className="rounded-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Addons */}
-                <div className="space-y-3">
-                  <h4 className="font-heading font-semibold text-sm uppercase tracking-wider text-muted-foreground">Free Addons Included</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {["WHOIS Privacy Protection", "DNS Management Panel", "Email Forwarding", "Domain Lock Protection"].map((a) => (
-                      <div key={a} className="flex items-center gap-2 text-sm p-2 bg-accent/5 rounded-sm border border-accent/10">
-                        <CheckCircle2 className="w-4 h-4 text-accent flex-shrink-0" />
-                        <span>{a}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm h-12 font-semibold uppercase text-xs tracking-wider">
-                  <CreditCard className="w-4 h-4 mr-2" /> Proceed to Payment — KSh {cartTotal.toLocaleString()}
-                </Button>
-                <p className="text-[10px] text-muted-foreground text-center">Payment processing via M-Pesa, card, or bank transfer. Backend integration pending.</p>
-              </form>
-            </motion.div>
-          </motion.div>
         )}
       </AnimatePresence>
 
@@ -365,38 +252,6 @@ export default function DomainsPage() {
                   <div className="text-[10px] opacity-80">{f.desc}</div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing grid */}
-      <section className="section-padding bg-background">
-        <div className="container-max">
-          <div className="text-center mb-12">
-            <span className="section-label justify-center">Pricing</span>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold">Domain <span className="text-accent">Extensions</span></h2>
-            <p className="text-muted-foreground mt-3 text-sm sm:text-base">All domains include free WHOIS privacy and DNS management.</p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border border-border">
-            {extensions.map((d, i) => (
-              <motion.div
-                key={d.ext}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-                className="p-4 sm:p-6 border-r border-b bg-card group hover:bg-accent transition-colors duration-500"
-              >
-                <Globe className="w-6 sm:w-8 h-6 sm:h-8 text-accent mx-auto mb-3 group-hover:text-accent-foreground transition-colors duration-500" />
-                <div className="font-heading font-bold text-base sm:text-xl mb-1 text-center group-hover:text-accent-foreground transition-colors duration-500">{d.ext}</div>
-                <div className="text-accent font-bold text-center text-sm sm:text-lg group-hover:text-accent-foreground transition-colors duration-500">KSh {d.price.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground text-center group-hover:text-accent-foreground/70 transition-colors duration-500">/year</div>
-                <div className="text-[10px] text-muted-foreground/60 text-center mt-1 group-hover:text-accent-foreground/50 transition-colors duration-500">{d.desc}</div>
-                <Button size="sm" onClick={() => { setQuery("mybusiness"); addToCart({ domain: `mybusiness${d.ext}`, ext: d.ext, available: true, price: d.price }); }} className="mt-4 w-full text-xs rounded-sm bg-primary text-primary-foreground hover:bg-primary/90 group-hover:bg-accent-foreground group-hover:text-accent transition-colors duration-500">
-                  Register
-                </Button>
-              </motion.div>
             ))}
           </div>
         </div>
@@ -437,11 +292,11 @@ export default function DomainsPage() {
 
       {/* Floating Cart Badge */}
       <AnimatePresence>
-        {cart.length > 0 && !showRegForm && (
+        {cart.length > 0 && (
           <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="fixed bottom-4 right-4 z-40 sm:bottom-6 sm:right-6">
-            <Button onClick={() => setShowRegForm(true)} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm shadow-lg h-12 px-6 font-semibold text-sm">
-              <ShoppingCart className="w-4 h-4 mr-2" />
-              {cart.length} domain{cart.length > 1 ? "s" : ""} — KSh {cartTotal.toLocaleString()}
+            <Button onClick={handleRegisterDomains} disabled={registering} className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-sm shadow-lg h-12 px-6 font-semibold text-sm">
+              {registering ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
+              Register {cart.length} domain{cart.length > 1 ? "s" : ""}
             </Button>
           </motion.div>
         )}

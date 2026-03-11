@@ -154,14 +154,9 @@ export default function ClientTickets() {
                   <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                     <td className="px-6 py-4 font-medium">#{t.tid}</td>
                     <td className="px-6 py-4">
-                      <a
-                        href={`https://abancool.com/clients/viewticket.php?tid=${t.tid}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent hover:underline"
-                      >
+                      <span className="text-foreground font-medium">
                         {t.subject}
-                      </a>
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{t.department}</td>
                     <td className="px-6 py-4">
