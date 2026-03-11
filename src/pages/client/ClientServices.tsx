@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchServices } from "@/lib/whmcs-api";
-import { Server, ExternalLink, Loader2 } from "lucide-react";
+import { Server, Loader2, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "react-router-dom";
 
 export default function ClientServices() {
   const [services, setServices] = useState<any[]>([]);
@@ -25,9 +26,17 @@ export default function ClientServices() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl lg:text-3xl font-extrabold">My Services</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage your hosting services</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="font-heading text-2xl lg:text-3xl font-extrabold">My Services</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage your hosting services</p>
+        </div>
+        <Link
+          to="/hosting"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent text-accent-foreground rounded-sm text-sm font-semibold hover:bg-accent/90 transition-colors"
+        >
+          Order New Hosting
+        </Link>
       </div>
 
       <div className="bg-card rounded-sm border border-border overflow-hidden">
@@ -39,9 +48,9 @@ export default function ClientServices() {
           <div className="text-center py-20">
             <Server className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-muted-foreground">No services found</p>
-            <a href="https://abancool.com/clients/cart.php" className="text-accent text-sm hover:underline mt-1 inline-block">
+            <Link to="/hosting" className="text-accent text-sm hover:underline mt-1 inline-block">
               Order a hosting plan →
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -67,14 +76,9 @@ export default function ClientServices() {
                     <td className="px-6 py-4 text-muted-foreground">{s.billingcycle}</td>
                     <td className="px-6 py-4 text-muted-foreground">{s.nextduedate}</td>
                     <td className="px-6 py-4 text-right">
-                      <a
-                        href={`https://abancool.com/clients/clientarea.php?action=productdetails&id=${s.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-accent hover:underline text-sm font-medium"
-                      >
-                        Manage <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground text-sm">
+                        <Settings className="w-3.5 h-3.5" /> Managed
+                      </span>
                     </td>
                   </tr>
                 ))}

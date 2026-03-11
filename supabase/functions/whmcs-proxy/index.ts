@@ -6,7 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const WHMCS_API_URL = "https://abancool.com/clients/includes/api.php";
+const WHMCS_API_URL = Deno.env.get("WHMCS_URL")
+  ? `${Deno.env.get("WHMCS_URL")}/includes/api.php`
+  : "https://billing.abancool.com/includes/api.php";
 
 const ALLOWED_ACTIONS = [
   "GetClientsProducts",
@@ -19,7 +21,16 @@ const ALLOWED_ACTIONS = [
   "OpenTicket",
   "GetClients",
   "AddClient",
+  // Public actions (no client ID needed)
+  "GetProducts",
+  "DomainWhois",
+  "GetTLDPricing",
+  "AddOrder",
+  "RegisterDomain",
 ];
+
+// Actions that don't require a client ID lookup
+const PUBLIC_ACTIONS = ["GetProducts", "DomainWhois", "GetTLDPricing"];
 
 async function whmcsRequest(action: string, params: Record<string, string> = {}) {
   // Note: secret name has typo in storage — WHMCS_IDENTFIER (missing I)
@@ -68,7 +79,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate via Supabase JWT
+    const { action, params = {} } = await req.json();
+
+    if (!action || !ALLOWED_ACTIONS.includes(action)) {
+      return new Response(JSON.stringify({ error: "Invalid or disallowed action" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Public actions don't need auth
+    if (PUBLIC_ACTIONS.includes(action)) {
+      const data = await whmcsRequest(action, params);
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Authenticated actions need JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -91,20 +119,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, params = {} } = await req.json();
-
-    if (!action || !ALLOWED_ACTIONS.includes(action)) {
-      return new Response(JSON.stringify({ error: "Invalid or disallowed action" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // Map user email to WHMCS client ID
     const clientId = await getWhmcsClientId(user.email!);
-    if (!clientId && action !== "AddClient") {
+    if (!clientId && action !== "AddClient" && action !== "AddOrder" && action !== "RegisterDomain") {
       return new Response(
-        JSON.stringify({ error: "No WHMCS account found for this email. Please register at https://abancool.com/clients/register.php" }),
+        JSON.stringify({ error: "No WHMCS account found for this email. Please register first." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -118,14 +137,14 @@ Deno.serve(async (req) => {
         case "GetTickets":
         case "GetClientsDetails":
         case "UpdateClient":
+        case "OpenTicket":
+        case "AddOrder":
+        case "RegisterDomain":
           actionParams.clientid = clientId;
           break;
         case "GetInvoices":
         case "GetOrders":
           actionParams.userid = clientId;
-          break;
-        case "OpenTicket":
-          actionParams.clientid = clientId;
           break;
       }
     }

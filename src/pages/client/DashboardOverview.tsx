@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Server, Globe, FileText, Headphones, ArrowRight, ExternalLink } from "lucide-react";
+import { Server, Globe, FileText, Headphones, ArrowRight } from "lucide-react";
 import { fetchServices, fetchDomains, fetchInvoices, fetchTickets } from "@/lib/whmcs-api";
 import { Link } from "react-router-dom";
 
@@ -41,7 +41,7 @@ export default function DashboardOverview() {
 
   const cards: SummaryCard[] = [
     { icon: Server, label: "Active Services", count: stats.services, color: "bg-primary/10 text-primary", link: "/client/services" },
-    { icon: Globe, label: "Domains", count: stats.domains, color: "bg-accent/10 text-accent", link: "/client/domains" },
+    { icon: Globe, label: "Domains", count: stats.domains, color: "bg-primary/10 text-primary", link: "/client/domains" },
     { icon: FileText, label: "Unpaid Invoices", count: stats.invoices, color: "bg-destructive/10 text-destructive", link: "/client/billing" },
     { icon: Headphones, label: "Open Tickets", count: stats.tickets, color: "bg-primary/10 text-primary", link: "/client/tickets" },
   ];
@@ -77,20 +77,18 @@ export default function DashboardOverview() {
       <div className="bg-card rounded-sm border border-border p-6">
         <h2 className="font-heading font-bold text-lg mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <a
-            href="https://abancool.com/clients/cart.php?a=add&pid=1"
+          <Link
+            to="/hosting"
             className="flex items-center gap-3 px-4 py-3 rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors text-sm font-medium"
           >
             <Server className="w-4 h-4 text-accent" /> Order Hosting
-            <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground" />
-          </a>
-          <a
-            href="https://abancool.com/clients/cart.php?a=add&domain=register"
+          </Link>
+          <Link
+            to="/domains"
             className="flex items-center gap-3 px-4 py-3 rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors text-sm font-medium"
           >
             <Globe className="w-4 h-4 text-accent" /> Register Domain
-            <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground" />
-          </a>
+          </Link>
           <Link
             to="/client/tickets"
             className="flex items-center gap-3 px-4 py-3 rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors text-sm font-medium"

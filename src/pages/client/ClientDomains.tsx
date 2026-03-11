@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchDomains } from "@/lib/whmcs-api";
-import { Globe, ExternalLink, Loader2 } from "lucide-react";
+import { Globe, Loader2, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "react-router-dom";
 
 export default function ClientDomains() {
   const [domains, setDomains] = useState<any[]>([]);
@@ -30,12 +31,12 @@ export default function ClientDomains() {
           <h1 className="font-heading text-2xl lg:text-3xl font-extrabold">My Domains</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your registered domains</p>
         </div>
-        <a
-          href="https://abancool.com/clients/cart.php?a=add&domain=register"
+        <Link
+          to="/domains"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent text-accent-foreground rounded-sm text-sm font-semibold hover:bg-accent/90 transition-colors"
         >
-          Register New Domain <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+          Register New Domain
+        </Link>
       </div>
 
       <div className="bg-card rounded-sm border border-border overflow-hidden">
@@ -47,9 +48,9 @@ export default function ClientDomains() {
           <div className="text-center py-20">
             <Globe className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-muted-foreground">No domains found</p>
-            <a href="https://abancool.com/clients/cart.php?a=add&domain=register" className="text-accent text-sm hover:underline mt-1 inline-block">
+            <Link to="/domains" className="text-accent text-sm hover:underline mt-1 inline-block">
               Register a domain →
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -73,14 +74,9 @@ export default function ClientDomains() {
                       <Badge variant="outline" className={statusColor(d.status)}>{d.status}</Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <a
-                        href={`https://abancool.com/clients/clientarea.php?action=domaindetails&id=${d.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-accent hover:underline text-sm font-medium"
-                      >
-                        Manage <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground text-sm">
+                        <Settings className="w-3.5 h-3.5" /> Managed
+                      </span>
                     </td>
                   </tr>
                 ))}
