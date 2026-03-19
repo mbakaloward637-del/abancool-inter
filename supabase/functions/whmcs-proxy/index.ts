@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const WHMCS_API_URL = Deno.env.get("WHMCS_URL")
   ? `${Deno.env.get("WHMCS_URL")}/includes/api.php`
-  : "https://billing.abancool.com/includes/api.php";
+  : "https://abancool.com/clients/includes/api.php";
 
 const ALLOWED_ACTIONS = [
   "GetClientsProducts",

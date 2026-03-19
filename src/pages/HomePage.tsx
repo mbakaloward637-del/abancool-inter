@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Server, Code, Globe, MessageSquare, CreditCard, Shield, ArrowRight, CheckCircle2, Quote, Hotel, ShoppingCart, HeartPulse, Plane, MapPin } from "lucide-react";
+import { Server, Code, Globe, MessageSquare, CreditCard, Shield, ArrowRight, CheckCircle2, Quote, Hotel, ShoppingCart, HeartPulse, Plane, MapPin, Loader2 } from "lucide-react";
+import { fetchProducts } from "@/lib/whmcs-api";
 import heroImg from "@/assets/hero-developers.jpg";
 import aboutCoding from "@/assets/about-coding.jpg";
 import aboutServers from "@/assets/about-servers.jpg";
@@ -70,6 +71,118 @@ const fadeRight = {
   hidden: { opacity: 0, x: 40 },
   visible: { opacity: 1, x: 0, transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] as const } },
 };
+
+/* ── Dynamic Hosting Preview ── */
+function HostingPreview() {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProducts()
+      .then((products) => {
+        // Show up to 3 plans
+        setPlans(products.slice(0, 3));
+      })
+      .catch(() => setPlans([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="section-padding bg-background">
+        <div className="container-max text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto" />
+          <p className="text-muted-foreground mt-4 text-sm">Loading hosting plans...</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (plans.length === 0) {
+    return (
+      <section className="section-padding bg-background">
+        <div className="container-max text-center">
+          <span className="section-label justify-center">Hosting Plans</span>
+          <h2 className="font-heading text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
+            Reliable & Fast <span className="text-accent">Web Hosting</span>
+          </h2>
+          <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+            Explore our range of fast, secure hosting packages with 99.9% uptime.
+          </p>
+          <Link to="/hosting">
+            <Button className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold uppercase text-sm tracking-wider px-8 h-12 rounded-sm">
+              View Hosting Plans <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="section-padding bg-background">
+      <div className="container-max">
+        <div className="text-center mb-16">
+          <span className="section-label justify-center">Hosting Plans</span>
+          <h2 className="font-heading text-3xl md:text-4xl lg:text-5xl font-bold">
+            Reliable & Fast<br />
+            <span className="text-accent">Web Hosting</span>
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 max-w-4xl mx-auto border border-border">
+          {plans.map((plan: any, i: number) => {
+            const isPopular = i === 1;
+            const price = plan.pricing?.USD?.monthly || plan.pricing?.KES?.monthly || "—";
+            const features = plan.description
+              ? plan.description.split("\n").filter((l: string) => l.trim()).slice(0, 4)
+              : [];
+            return (
+              <motion.div
+                key={plan.pid || i}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                custom={i}
+                variants={fadeUp}
+                className={`p-8 border-r last:border-r-0 ${isPopular ? "bg-hero text-hero-foreground relative" : "bg-card"}`}
+              >
+                {isPopular && (
+                  <span className="absolute top-0 right-0 bg-accent text-accent-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                    Popular
+                  </span>
+                )}
+                <h3 className="font-heading font-bold text-lg mb-1">{plan.name}</h3>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-3xl font-heading font-bold text-accent">{price}</span>
+                  <span className={`text-sm ${isPopular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>/mo</span>
+                </div>
+                {features.length > 0 && (
+                  <ul className="space-y-3 mb-8">
+                    {features.map((f: string) => (
+                      <li key={f} className={`flex items-center gap-2 text-sm ${isPopular ? "text-hero-foreground/80" : "text-muted-foreground"}`}>
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-accent" /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Link to="/hosting">
+                  <Button className="w-full rounded-sm font-semibold uppercase text-xs tracking-wider bg-accent text-accent-foreground hover:bg-accent/90">
+                    Get Started
+                  </Button>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </div>
+        <div className="text-center mt-8">
+          <Link to="/hosting" className="text-accent text-sm font-semibold uppercase tracking-wider hover:underline inline-flex items-center gap-1">
+            View all plans <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -271,63 +384,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ═══════ HOSTING PREVIEW ═══════ */}
-      <section className="section-padding bg-background">
-        <div className="container-max">
-          <div className="text-center mb-16">
-            <span className="section-label justify-center">Hosting Plans</span>
-            <h2 className="font-heading text-3xl md:text-4xl lg:text-5xl font-bold">
-              Reliable & Fast<br />
-              <span className="text-accent">Web Hosting</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 max-w-4xl mx-auto border border-border">
-            {[
-              { name: "Starter", price: "420", period: "/mo", features: ["2GB SSD", "10GB Bandwidth", "Free SSL", "2 Emails"] },
-              { name: "Business", price: "3,000", period: "/yr", features: ["15GB SSD", "Unlimited BW", "Free SSL", "Unlimited Emails"], popular: true },
-              { name: "Enterprise", price: "5,000", period: "/yr", features: ["60GB SSD", "Unlimited BW", "Daily Backups", "Unlimited Sites"] },
-            ].map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                custom={i}
-                variants={fadeUp}
-                className={`p-8 border-r last:border-r-0 ${plan.popular ? "bg-hero text-hero-foreground relative" : "bg-card"}`}
-              >
-                {plan.popular && (
-                  <span className="absolute top-0 right-0 bg-accent text-accent-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-1">
-                    Popular
-                  </span>
-                )}
-                <h3 className="font-heading font-bold text-lg mb-1">{plan.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-heading font-bold text-accent">KSh {plan.price}</span>
-                    <span className={`text-sm ${plan.popular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>{plan.period}</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((f) => (
-                    <li key={f} className={`flex items-center gap-2 text-sm ${plan.popular ? "text-hero-foreground/80" : "text-muted-foreground"}`}>
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-accent" /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/hosting">
-                  <Button className="w-full rounded-sm font-semibold uppercase text-xs tracking-wider bg-accent text-accent-foreground hover:bg-accent/90">
-                    Get Started
-                  </Button>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link to="/hosting" className="text-accent text-sm font-semibold uppercase tracking-wider hover:underline inline-flex items-center gap-1">
-              View all plans <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* ═══════ HOSTING PREVIEW (Dynamic from WHMCS) ═══════ */}
+      <HostingPreview />
 
       {/* ═══════ OFFICES — XtraTheme style ═══════ */}
       <section className="relative overflow-hidden">
