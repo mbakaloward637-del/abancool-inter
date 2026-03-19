@@ -272,63 +272,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ═══════ HOSTING PREVIEW ═══════ */}
-      <section className="section-padding bg-background">
-        <div className="container-max">
-          <div className="text-center mb-16">
-            <span className="section-label justify-center">Hosting Plans</span>
-            <h2 className="font-heading text-3xl md:text-4xl lg:text-5xl font-bold">
-              Reliable & Fast<br />
-              <span className="text-accent">Web Hosting</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 max-w-4xl mx-auto border border-border">
-            {[
-              { name: "Starter", price: "420", period: "/mo", features: ["2GB SSD", "10GB Bandwidth", "Free SSL", "2 Emails"] },
-              { name: "Business", price: "3,000", period: "/yr", features: ["15GB SSD", "Unlimited BW", "Free SSL", "Unlimited Emails"], popular: true },
-              { name: "Enterprise", price: "5,000", period: "/yr", features: ["60GB SSD", "Unlimited BW", "Daily Backups", "Unlimited Sites"] },
-            ].map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                custom={i}
-                variants={fadeUp}
-                className={`p-8 border-r last:border-r-0 ${plan.popular ? "bg-hero text-hero-foreground relative" : "bg-card"}`}
-              >
-                {plan.popular && (
-                  <span className="absolute top-0 right-0 bg-accent text-accent-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-1">
-                    Popular
-                  </span>
-                )}
-                <h3 className="font-heading font-bold text-lg mb-1">{plan.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-heading font-bold text-accent">KSh {plan.price}</span>
-                    <span className={`text-sm ${plan.popular ? "text-hero-foreground/60" : "text-muted-foreground"}`}>{plan.period}</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((f) => (
-                    <li key={f} className={`flex items-center gap-2 text-sm ${plan.popular ? "text-hero-foreground/80" : "text-muted-foreground"}`}>
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-accent" /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/hosting">
-                  <Button className="w-full rounded-sm font-semibold uppercase text-xs tracking-wider bg-accent text-accent-foreground hover:bg-accent/90">
-                    Get Started
-                  </Button>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link to="/hosting" className="text-accent text-sm font-semibold uppercase tracking-wider hover:underline inline-flex items-center gap-1">
-              View all plans <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* ═══════ HOSTING PREVIEW (Dynamic from WHMCS) ═══════ */}
+      <HostingPreview />
 
       {/* ═══════ OFFICES — XtraTheme style ═══════ */}
       <section className="relative overflow-hidden">
